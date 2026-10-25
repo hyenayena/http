@@ -1,7 +1,11 @@
 {
 	"name": "http",
-	"version": "0.1.0",
-	"description": "Safe internet access for the assistant (skeleton)",
+	"version": "0.3.0",
+	"description": "HTTP client for modules and the assistant: all methods, custom headers and bodies, parallel batches, HTML pages shown as Markdown, private addresses blocked",
 	"runtime": "node",
-	"entry": "src/index.ts"
+	"entry": "src/index.ts",
+	"install": "npm install --prefix . --omit=dev --no-audit --no-fund",
+	"dependencies": {
+		"core": "core"
+	}
 }

@@ -1,17 +1,130 @@
-import type {Command, Subcommand} from '../../../src/api.js';
+import {readFile, stat} from 'node:fs/promises';
+import path from 'node:path';
+import type {Command, CommandContext, Subcommand} from '../../../src/api.js';
+import {isMethod, parseCall} from './args.js';
+import type {HttpClient} from './client/client.js';
+import {HttpError, HTTP_METHODS, type HttpResponse} from './client/types.js';
+import {htmlToMarkdown, isHtml} from './html/markdown.js';
+import {sanitizeBlock} from './kit.js';
 
-const subcommands: Subcommand[] = [{name: 'help', usage: 'http help', description: 'Show this help', agent: 'safe'}];
+export type CommandDeps = {
+	/** Created on first use and kept; private addresses stay blocked. */
+	client: () => HttpClient;
+	cwd?: string;
+};
 
-export function createCommand(): Command {
+export const MAX_BODY_FILE = 1024 * 1024;
+export const MAX_RESPONSE = 4 * 1024 * 1024;
+export const MAX_SHOWN = 64 * 1024;
+
+const OPTIONS = '[-H name:value]… [--json] [-i] [--raw] [--timeout <s>]';
+const WITH_BODY = new Set(['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
+
+const subcommands: Subcommand[] = [
+	...HTTP_METHODS.map(m => {
+		const name = m.toLowerCase();
+		const body = WITH_BODY.has(m) ? ' [--file <path> | --data <text…>]' : '';
+		return {name, usage: `http ${name} <url> ${OPTIONS}${body}`, description: `Send a ${m} request`, agent: 'confirm' as const};
+	}),
+	{name: 'help', usage: 'http help', description: 'Show this help', agent: 'safe'},
+];
+
+const TEXTUAL = /^(text\/|application\/([\w.+-]*\+)?(json|xml|javascript|x-www-form-urlencoded|yaml|graphql))/i;
+
+const formatSize = (bytes: number): string =>
+	bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KiB` : `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
+
+function isText(res: HttpResponse): boolean {
+	const type = res.headers['content-type'];
+	if (type) return TEXTUAL.test(type.trim());
+	return !res.body.includes(0);
+}
+
+export type FormatOptions = {include?: boolean; raw?: boolean};
+
+export function formatResponse(res: HttpResponse, {include = false, raw = false}: FormatOptions = {}): string[] {
+	const lines = [sanitizeBlock(`HTTP ${res.status}${res.statusText ? ` ${res.statusText}` : ''} · ${formatSize(res.body.length)} · ${res.ms} ms`)];
+	if (res.redirects > 0) lines.push(sanitizeBlock(`Redirected ${res.redirects}× to ${res.url}`));
+	if (include) for (const [name, value] of Object.entries(res.headers)) lines.push(sanitizeBlock(`${name}: ${value}`));
+	if (res.body.length === 0) return lines;
+	lines.push('');
+	if (!isText(res)) {
+		lines.push(`(binary body, ${formatSize(res.body.length)}, not shown)`);
+		return lines;
+	}
+	let text = res.text();
+	if (!raw && isHtml(res.headers['content-type'], text)) {
+		try {
+			const page = htmlToMarkdown(text, {baseUrl: res.url});
+			lines.push(`(HTML converted to Markdown, ${formatSize(res.body.length)} -> ${formatSize(Buffer.byteLength(page.markdown))}; --raw shows the source)`);
+			if (page.title) lines.push(sanitizeBlock(`Title: ${page.title}`));
+			lines.push('');
+			text = page.markdown;
+		} catch (err) {
+			lines.push(sanitizeBlock(`(HTML could not be converted: ${err instanceof Error ? err.message : String(err)}; showing the source)`), '');
+		}
+	}
+	const shown = text.length > MAX_SHOWN ? text.slice(0, MAX_SHOWN) : text;
+	lines.push(sanitizeBlock(shown));
+	if (shown.length < text.length) lines.push(`… ${text.length - shown.length} more characters not shown`);
+	return lines;
+}
+
+async function readBodyFile(file: string, cwd: string): Promise<Uint8Array> {
+	const full = path.resolve(cwd, file);
+	const info = await stat(full).catch(() => undefined);
+	if (!info?.isFile()) throw new Error(`No such file: ${file}`);
+	if (info.size > MAX_BODY_FILE) throw new Error(`Body file is larger than ${formatSize(MAX_BODY_FILE)}`);
+	return new Uint8Array(await readFile(full));
+}
+
+export function createCommand(deps: CommandDeps): Command {
+	const help = (ctx: CommandContext) => {
+		for (const s of subcommands) ctx.print(`${s.usage}  ${s.description}`);
+	};
 	return {
 		name: 'http',
-		description: 'Safe internet access for the assistant (not implemented yet)',
-		usage: 'http help',
+		description: 'Send HTTP requests to public addresses',
+		usage: 'http <get|head|post|put|patch|delete|options> <url> [options]',
 		subcommands,
-		agent: 'safe',
-		run: async ([sub], ctx) => {
-			if (sub !== undefined && sub !== 'help') throw new Error(`Unknown subcommand "${sub}". Run "http help".`);
-			for (const s of subcommands) ctx.print(`${s.usage}  ${s.description}`);
+		agent: 'confirm',
+		run: async ([sub, ...args], ctx) => {
+			if (sub === undefined || sub === 'help') return help(ctx);
+			if (!isMethod(sub)) throw new Error(`Unknown subcommand "${sub.slice(0, 32)}". Run "http help".`);
+			const call = parseCall(sub.toUpperCase() as Parameters<typeof parseCall>[0], args);
+			if ((call.data !== undefined || call.file !== undefined) && !WITH_BODY.has(call.method)) {
+				throw new Error(`${call.method} requests cannot have a body`);
+			}
+			let body: string | Uint8Array | undefined = call.data;
+			if (call.file !== undefined) body = await readBodyFile(call.file, deps.cwd ?? process.cwd());
+			if (call.json && body !== undefined) {
+				try {
+					JSON.parse(typeof body === 'string' ? body : new TextDecoder().decode(body));
+				} catch {
+					throw new Error('"--json" body is not valid JSON');
+				}
+			}
+			const headers = {...call.headers};
+			if (call.json) {
+				const has = (name: string) => Object.keys(headers).some(h => h.toLowerCase() === name);
+				if (!has('content-type') && body !== undefined) headers['content-type'] = 'application/json';
+				if (!has('accept')) headers.accept = 'application/json';
+			}
+			try {
+				const res = await deps.client().request({
+					method: call.method,
+					url: call.url,
+					headers,
+					maxBytes: MAX_RESPONSE,
+					...(body !== undefined && {body}),
+					...(call.timeoutMs !== undefined && {timeoutMs: call.timeoutMs}),
+					...(ctx.signal && {signal: ctx.signal}),
+				});
+				for (const line of formatResponse(res, {include: call.include, raw: call.raw})) ctx.print(line);
+			} catch (err) {
+				if (err instanceof HttpError) throw new Error(sanitizeBlock(err.message));
+				throw err;
+			}
 		},
 	};
 }

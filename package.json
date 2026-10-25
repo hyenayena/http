@@ -5,5 +5,10 @@
 	"scripts": {
 		"typecheck": "tsc -p . && tsc -p tests",
 		"test": "node --import tsx --test \"tests/**/*.test.ts\""
+	},
+	"dependencies": {
+		"node-html-markdown": "^2.0.0",
+		"node-html-parser": "^6.1.13",
+		"undici": "^8.12.3"
 	}
 }
