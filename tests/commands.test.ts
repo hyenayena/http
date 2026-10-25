@@ -5,7 +5,7 @@ import path from 'node:path';
 import {test} from 'node:test';
 import type {CommandContext} from '../../../src/api.js';
 import {createHttpClient} from '../src/client/client.js';
-import {createCommand, MAX_BODY_FILE} from '../src/commands.js';
+import {createCommand, MAX_BODY_FILE, MAX_SHOWN} from '../src/commands.js';
 import {bytes, fakeTransport, type FakeReply} from './helpers.js';
 
 const setup = (reply: FakeReply = {}, cwd?: string) => {
@@ -99,4 +99,23 @@ test('an untyped body is converted only when it looks like an HTML document', as
 	const frag = setup({body: bytes('<p>x</p>')});
 	await frag.run('get', 'https://x.test/');
 	assert.equal(frag.lines.at(-1), '<p>x</p>');
+});
+
+test('a long text is shown in parts that --from continues, ending at line breaks', async () => {
+	const lines = Array.from({length: 3000}, (_, i) => `line ${String(i).padStart(4, '0')} ${'.'.repeat(10)}`);
+	const reply = {headers: {'content-type': 'text/plain'}, body: bytes(lines.join('\n'))};
+	const first = setup(reply);
+	await first.run('get', 'https://x.test/');
+	const footer = first.lines.at(-1)!;
+	const next = Number(/--from (\d+)$/.exec(footer)![1]);
+	assert.ok(first.lines.at(-2)!.length <= MAX_SHOWN);
+	assert.ok(first.lines.at(-2)!.endsWith('.'));
+	const second = setup(reply);
+	await second.run('get', 'https://x.test/', '--from', String(next));
+	assert.match(second.lines[2]!, new RegExp(`^\\(characters ${next}-\\d+ of \\d+\\)$`));
+	assert.match(second.lines[4]!, /^line \d{4} /);
+	const past = setup(reply);
+	await past.run('get', 'https://x.test/', '--from', '999999');
+	assert.match(past.lines.at(-1)!, /^\(nothing from character 999999: the text has \d+\)$/);
+	await assert.rejects(past.run('get', 'https://x.test/', '--from', '-1'), /character offset/);
 });

@@ -8,6 +8,7 @@ export type ParsedCall = {
 	include: boolean;
 	raw: boolean;
 	timeoutMs?: number;
+	from?: number;
 	data?: string;
 	file?: string;
 };
@@ -15,7 +16,7 @@ export type ParsedCall = {
 export const isMethod = (word: string): word is HttpMethod => (HTTP_METHODS as readonly string[]).includes(word.toUpperCase());
 
 /**
- * Parses `<url> [-H name:value]… [--json] [-i] [--raw] [--timeout <s>] [--file <path> | --data <text…>]`.
+ * Parses `<url> [-H name:value]… [--json] [-i] [--raw] [--from <n>] [--timeout <s>] [--file <path> | --data <text…>]`.
  * The console splits lines on whitespace, so `--data` takes the rest of the line joined by single spaces.
  */
 export function parseCall(method: HttpMethod, args: readonly string[]): ParsedCall {
@@ -46,6 +47,12 @@ export function parseCall(method: HttpMethod, args: readonly string[]): ParsedCa
 			case '--raw':
 				call.raw = true;
 				break;
+			case '--from': {
+				const from = Number(value());
+				if (!Number.isSafeInteger(from) || from < 0) throw new Error('"--from" takes a character offset, 0 or more');
+				call.from = from;
+				break;
+			}
 			case '--timeout': {
 				const seconds = Number(value());
 				if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 600) throw new Error('"--timeout" takes seconds, from 1 to 600');

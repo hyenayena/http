@@ -15,9 +15,10 @@ export type CommandDeps = {
 
 export const MAX_BODY_FILE = 1024 * 1024;
 export const MAX_RESPONSE = 4 * 1024 * 1024;
-export const MAX_SHOWN = 64 * 1024;
+// One part fits the assistant's command output budget (24 Ki characters in core) with room for the header.
+export const MAX_SHOWN = 20 * 1024;
 
-const OPTIONS = '[-H name:value]… [--json] [-i] [--raw] [--timeout <s>]';
+const OPTIONS = '[-H name:value]… [--json] [-i] [--raw] [--from <n>] [--timeout <s>]';
 const WITH_BODY = new Set(['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
 
 const subcommands: Subcommand[] = [
@@ -40,9 +41,9 @@ function isText(res: HttpResponse): boolean {
 	return !res.body.includes(0);
 }
 
-export type FormatOptions = {include?: boolean; raw?: boolean};
+export type FormatOptions = {include?: boolean; raw?: boolean; from?: number};
 
-export function formatResponse(res: HttpResponse, {include = false, raw = false}: FormatOptions = {}): string[] {
+export function formatResponse(res: HttpResponse, {include = false, raw = false, from = 0}: FormatOptions = {}): string[] {
 	const lines = [sanitizeBlock(`HTTP ${res.status}${res.statusText ? ` ${res.statusText}` : ''} · ${formatSize(res.body.length)} · ${res.ms} ms`)];
 	if (res.redirects > 0) lines.push(sanitizeBlock(`Redirected ${res.redirects}× to ${res.url}`));
 	if (include) for (const [name, value] of Object.entries(res.headers)) lines.push(sanitizeBlock(`${name}: ${value}`));
@@ -64,10 +65,28 @@ export function formatResponse(res: HttpResponse, {include = false, raw = false}
 			lines.push(sanitizeBlock(`(HTML could not be converted: ${err instanceof Error ? err.message : String(err)}; showing the source)`), '');
 		}
 	}
-	const shown = text.length > MAX_SHOWN ? text.slice(0, MAX_SHOWN) : text;
-	lines.push(sanitizeBlock(shown));
-	if (shown.length < text.length) lines.push(`… ${text.length - shown.length} more characters not shown`);
+	const part = pageOf(text, from);
+	if (from > 0) {
+		if (part.text === '') {
+			lines.push(`(nothing from character ${from}: the text has ${text.length})`);
+			return lines;
+		}
+		lines.push(`(characters ${from}-${part.end} of ${text.length})`, '');
+	}
+	lines.push(sanitizeBlock(part.text));
+	if (part.end < text.length) lines.push(`… ${text.length - part.end} more characters; the next part: --from ${part.end}`);
 	return lines;
+}
+
+// Ends a part at a line break when one is near the limit, so the next part starts on a new line.
+function pageOf(text: string, from: number): {text: string; end: number} {
+	if (from >= text.length) return {text: '', end: text.length};
+	let end = Math.min(text.length, from + MAX_SHOWN);
+	if (end < text.length) {
+		const br = text.lastIndexOf('\n', end);
+		if (br > from + MAX_SHOWN / 2) end = br + 1;
+	}
+	return {text: text.slice(from, end).replace(/\n$/, ''), end};
 }
 
 async function readBodyFile(file: string, cwd: string): Promise<Uint8Array> {
@@ -120,7 +139,7 @@ export function createCommand(deps: CommandDeps): Command {
 					...(call.timeoutMs !== undefined && {timeoutMs: call.timeoutMs}),
 					...(ctx.signal && {signal: ctx.signal}),
 				});
-				for (const line of formatResponse(res, {include: call.include, raw: call.raw})) ctx.print(line);
+				for (const line of formatResponse(res, {include: call.include, raw: call.raw, ...(call.from !== undefined && {from: call.from})})) ctx.print(line);
 			} catch (err) {
 				if (err instanceof HttpError) throw new Error(sanitizeBlock(err.message));
 				throw err;
