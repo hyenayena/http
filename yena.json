@@ -1,0 +1,7 @@
+{
+	"name": "http",
+	"version": "0.1.0",
+	"description": "Safe internet access for the assistant (skeleton)",
+	"runtime": "node",
+	"entry": "src/index.ts"
+}
