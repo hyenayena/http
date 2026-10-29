@@ -8,14 +8,12 @@ import {htmlToMarkdown, isHtml} from './html/markdown.js';
 import {sanitizeBlock} from './kit.js';
 
 export type CommandDeps = {
-	/** Created on first use and kept; private addresses stay blocked. */
 	client: () => HttpClient;
 	cwd?: string;
 };
 
 export const MAX_BODY_FILE = 1024 * 1024;
 export const MAX_RESPONSE = 4 * 1024 * 1024;
-// One part fits the assistant's command output budget (24 Ki characters in core) with room for the header.
 export const MAX_SHOWN = 20 * 1024;
 
 const OPTIONS = '[-H name:value]… [--json] [-i] [--raw] [--from <n>] [--timeout <s>]';
@@ -98,7 +96,6 @@ export function formatResponse(res: HttpResponse, {include = false, raw = false,
 	return lines;
 }
 
-// Ends a part at a line break when one is near the limit, so the next part starts on a new line.
 function pageOf(text: string, from: number): {text: string; end: number} {
 	if (from >= text.length) return {text: '', end: text.length};
 	let end = Math.min(text.length, from + MAX_SHOWN);

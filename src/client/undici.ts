@@ -1,5 +1,3 @@
-// The only file that knows the HTTP library. Replacing undici means rewriting this file against
-// the `Transport` contract in types.ts; nothing else imports it.
 import dns from 'node:dns';
 import type {LookupFunction} from 'node:net';
 import {Agent, request} from 'undici';
@@ -8,7 +6,6 @@ import {HttpError, type Transport, type TransportRequest, type TransportResponse
 
 export type UndiciTransportOptions = {
 	allowPrivate?: boolean;
-	/** Injected for tests; defaults to `dns.lookup`. */
 	lookup?: typeof dns.lookup;
 };
 
@@ -16,8 +13,6 @@ const BLOCKED = Symbol('blocked');
 
 const blockedError = (): Error => Object.assign(new Error('Blocked address'), {[BLOCKED]: true, code: 'EBLOCKED'});
 
-// Checks every resolved address at connect time, so a public name that resolves to a private
-// address (or a redirect to one) is refused too.
 const guardedLookup = (base: typeof dns.lookup): LookupFunction =>
 	((hostname: string, options: dns.LookupOptions, callback: (...args: unknown[]) => void) => {
 		base(hostname, {...options, all: true}, (err, addresses) => {

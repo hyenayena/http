@@ -1,8 +1,5 @@
 import {BlockList, isIP} from 'node:net';
 
-// Loopback, private, link-local (cloud metadata), CGNAT, multicast, reserved, special IPv6 ranges and
-// NAT64. No ::ffff:0:0/96 rule: BlockList already matches IPv4-mapped IPv6 against the IPv4 rules, and
-// that rule would block every IPv4 address.
 const V4 = [
 	['0.0.0.0', 8],
 	['10.0.0.0', 8],
@@ -38,14 +35,12 @@ const blocked = new BlockList();
 for (const [net, prefix] of V4) blocked.addSubnet(net, prefix, 'ipv4');
 for (const [net, prefix] of V6) blocked.addSubnet(net, prefix, 'ipv6');
 
-/** True for an address the client must not reach unless private addresses are allowed. */
 export function isBlockedAddress(address: string): boolean {
 	const family = isIP(address);
 	if (family === 0) return false;
 	return blocked.check(address, family === 4 ? 'ipv4' : 'ipv6');
 }
 
-/** The IP of a URL host given as a literal (`[::1]` without brackets), else undefined. */
 export function ipLiteral(hostname: string): string | undefined {
 	const bare = hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
 	return isIP(bare) === 0 ? undefined : bare;

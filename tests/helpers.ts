@@ -4,7 +4,6 @@ import type {TransportRequest, TransportResponse, Transport} from '../src/client
 
 export type Seen = {method: string; url: string; headers: http.IncomingHttpHeaders; body: string};
 
-/** A local server; `handler` decides the answer, every request is recorded in `seen`. */
 export async function startServer(handler: (req: http.IncomingMessage, res: http.ServerResponse, body: string) => void) {
 	const seen: Seen[] = [];
 	const server = http.createServer((req, res) => {
@@ -31,7 +30,6 @@ export async function startServer(handler: (req: http.IncomingMessage, res: http
 
 export type FakeReply = Partial<TransportResponse> | ((req: TransportRequest) => Partial<TransportResponse> | Promise<Partial<TransportResponse>>);
 
-/** A transport that answers from a list (the last reply repeats) and records each hop. */
 export function fakeTransport(...replies: FakeReply[]) {
 	const sent: TransportRequest[] = [];
 	let closed = false;

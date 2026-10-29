@@ -1,10 +1,7 @@
-// The only file importing the HTML libraries. Turns a page into compact Markdown for a reader with
-// limited room (the assistant's context): keeps the main content, drops scripts, menus and forms.
 import {NodeHtmlMarkdown} from 'node-html-markdown';
 import {parse, type HTMLElement} from 'node-html-parser';
 
 export type HtmlToMarkdownOptions = {
-	/** Resolves relative links and images; usually the response's final URL. */
 	baseUrl?: string | URL;
 };
 
@@ -16,7 +13,6 @@ export type PageMarkdown = {
 const HTML_TYPE = /^(text\/html|application\/xhtml\+xml)\b/i;
 const HTML_START = /^\s*(<!--[\s\S]*?-->\s*)*(<!doctype\s+html|<html[\s>])/i;
 
-/** True for an HTML content type, or with no type for a body that starts like an HTML document. */
 export function isHtml(contentType: string | undefined, text?: string): boolean {
 	if (contentType) return HTML_TYPE.test(contentType.trim());
 	return text !== undefined && HTML_START.test(text.slice(0, 4096));
@@ -37,14 +33,11 @@ const converter = new NodeHtmlMarkdown({bulletMarker: '-', maxConsecutiveNewline
 function contentRoot(doc: HTMLElement): HTMLElement {
 	for (const selector of MAIN) {
 		const found = doc.querySelectorAll(selector);
-		// Several <article>s are usually a feed of cards, not the page's one article.
 		if (found.length === 1 && found[0]!.textContent.trim()) return found[0]!;
 	}
 	return doc.querySelector('body') ?? doc;
 }
 
-// Tables used for page layout (nested tables, role=presentation) become plain blocks: Markdown
-// tables cannot nest and would bury the text in pipes.
 function unwrapLayoutTables(root: HTMLElement): void {
 	for (const table of root.querySelectorAll('table')) {
 		if (table.getAttribute('role') !== 'presentation' && !table.querySelector('table')) continue;
@@ -62,14 +55,11 @@ function absolutize(root: HTMLElement, base: URL | undefined): void {
 			try {
 				el.setAttribute(attr, new URL(value, base).href);
 			} catch {
-				// A broken link stays as written.
 			}
 		}
 	}
 }
 
-// Dropped icons and line breaks in the HTML leave spaces at the edges of link text (`[Telegram ](…)`),
-// and the library pads every table cell to its column width, which can cost more than the HTML.
 function tidy(markdown: string): string {
 	let fenced = false;
 	return markdown

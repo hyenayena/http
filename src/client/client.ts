@@ -20,18 +20,14 @@ export type ClientDefaults = {
 
 export type HttpClientOptions = {
 	transport: Transport;
-	/** Must match how the transport was created; it guards IP literals, the transport guards names. */
 	allowPrivate?: boolean;
-	/** Relative request URLs are resolved against it. */
 	baseUrl?: string;
 	defaults?: ClientDefaults;
 	log?: Logger;
 };
 
 export type BatchOptions = {
-	/** Requests in flight at once; default 6. */
 	concurrency?: number;
-	/** Cancels every request not finished yet. */
 	signal?: AbortSignal;
 };
 
@@ -44,9 +40,7 @@ export type HttpClient = {
 	post(url: string | URL, options?: RequestOptions): Promise<HttpResponse>;
 	put(url: string | URL, options?: RequestOptions): Promise<HttpResponse>;
 	patch(url: string | URL, options?: RequestOptions): Promise<HttpResponse>;
-	/** Runs the requests in parallel (bounded); results keep the input order and never reject. */
 	all(requests: readonly HttpRequest[], options?: BatchOptions): Promise<HttpResult[]>;
-	/** Runs the requests one after another; results keep the input order and never reject. */
 	sequence(requests: readonly HttpRequest[], options?: Omit<BatchOptions, 'concurrency'>): Promise<HttpResult[]>;
 	close(): Promise<void>;
 };
@@ -60,7 +54,6 @@ export const DEFAULTS = {
 
 const TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 const BAD_VALUE = new RegExp('[\\u0000-\\u0008\\u000a-\\u001f\\u007f]');
-// Dropped when a redirect leaves the origin, as browsers and curl do.
 const ORIGIN_BOUND = ['authorization', 'cookie', 'proxy-authorization'];
 const BODY_HEADERS = ['content-type', 'content-length', 'content-encoding', 'transfer-encoding'];
 

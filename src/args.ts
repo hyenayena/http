@@ -15,10 +15,6 @@ export type ParsedCall = {
 
 export const isMethod = (word: string): word is HttpMethod => (HTTP_METHODS as readonly string[]).includes(word.toUpperCase());
 
-/**
- * Parses `<url> [-H name:value]… [--json] [-i] [--raw] [--from <n>] [--timeout <s>] [--file <path> | --data <text…>]`.
- * The console splits lines on whitespace, so `--data` takes the rest of the line joined by single spaces.
- */
 export function parseCall(method: HttpMethod, args: readonly string[]): ParsedCall {
 	const call: ParsedCall = {method, url: '', headers: {}, json: false, include: false, raw: false};
 	for (let i = 0; i < args.length; i++) {
