@@ -1,6 +1,6 @@
 import {readFile, stat} from 'node:fs/promises';
 import path from 'node:path';
-import type {Command, CommandContext, Subcommand} from '../../../src/api.js';
+import type {Command, OptionDoc, Subcommand} from '../../../src/api.js';
 import {isMethod, parseCall} from './args.js';
 import type {HttpClient} from './client/client.js';
 import {HttpError, HTTP_METHODS, type HttpResponse} from './client/types.js';
@@ -20,15 +20,35 @@ export const MAX_SHOWN = 20 * 1024;
 
 const OPTIONS = '[-H name:value]… [--json] [-i] [--raw] [--from <n>] [--timeout <s>]';
 const WITH_BODY = new Set(['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
+const USAGE = 'http <method> <url> [options]';
 
-const subcommands: Subcommand[] = [
-	...HTTP_METHODS.map(m => {
-		const name = m.toLowerCase();
-		const body = WITH_BODY.has(m) ? ' [--file <path> | --data <text…>]' : '';
-		return {name, usage: `http ${name} <url> ${OPTIONS}${body}`, description: `Send a ${m} request`, agent: 'confirm' as const};
-	}),
-	{name: 'help', usage: 'http help', description: 'Show this help', agent: 'safe'},
+const OPTION_DOCS: OptionDoc[] = [
+	{name: '-H', aliases: ['--header'], value: 'name:value', description: 'Send this request header', repeatable: true},
+	{name: '--json', description: 'Send and accept JSON; a body must be valid JSON'},
+	{name: '-i', aliases: ['--include'], description: 'Show the response headers'},
+	{name: '--raw', description: 'Show an HTML page as its source, not as Markdown'},
+	{name: '--from', value: '<n>', description: 'Show the text from this character on (the next part of a long one)'},
+	{name: '--timeout', value: '<s>', description: 'Give up after this many seconds (1 to 600)'},
 ];
+const BODY_DOCS: OptionDoc[] = [
+	{name: '--file', value: '<path>', description: 'Send this file as the body (up to 1 MiB)'},
+	{name: '--data', aliases: ['-d'], value: '<text…>', description: 'Send the rest of the line as the body'},
+];
+const URL_ARG = {name: 'url', description: 'An http or https address; private addresses are refused'};
+const NOTES = ['HTML pages are shown as Markdown; long text comes in parts, the footer gives the next --from'];
+
+const subcommands: Subcommand[] = HTTP_METHODS.map(m => {
+	const name = m.toLowerCase();
+	const body = WITH_BODY.has(m);
+	return {
+		name,
+		usage: `http ${name} <url> ${OPTIONS}${body ? ' [--file <path> | --data <text…>]' : ''}`,
+		description: m === 'OPTIONS' ? 'Send an OPTIONS request' : `Send a ${m} request`,
+		args: [URL_ARG],
+		options: body ? [...OPTION_DOCS, ...BODY_DOCS] : OPTION_DOCS,
+		agent: 'confirm' as const,
+	};
+});
 
 const TEXTUAL = /^(text\/|application\/([\w.+-]*\+)?(json|xml|javascript|x-www-form-urlencoded|yaml|graphql))/i;
 
@@ -98,17 +118,20 @@ async function readBodyFile(file: string, cwd: string): Promise<Uint8Array> {
 }
 
 export function createCommand(deps: CommandDeps): Command {
-	const help = (ctx: CommandContext) => {
-		for (const s of subcommands) ctx.print(`${s.usage}  ${s.description}`);
-	};
 	return {
 		name: 'http',
 		description: 'Send HTTP requests to public addresses',
-		usage: 'http <get|head|post|put|patch|delete|options> <url> [options]',
+		usage: USAGE,
+		args: [
+			{name: 'method', description: 'get, head, post, put, patch, delete or options'},
+			URL_ARG,
+			{name: 'options', description: 'See the help of a method, e.g. http get help'},
+		],
+		notes: NOTES,
 		subcommands,
 		agent: 'confirm',
 		run: async ([sub, ...args], ctx) => {
-			if (sub === undefined || sub === 'help') return help(ctx);
+			if (sub === undefined || sub === 'help') return ctx.showHelp ? ctx.showHelp() : ctx.print(USAGE);
 			if (!isMethod(sub)) throw new Error(`Unknown subcommand "${sub.slice(0, 32)}". Run "http help".`);
 			const call = parseCall(sub.toUpperCase() as Parameters<typeof parseCall>[0], args);
 			if ((call.data !== undefined || call.file !== undefined) && !WITH_BODY.has(call.method)) {

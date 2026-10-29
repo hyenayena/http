@@ -17,15 +17,20 @@ const setup = (reply: FakeReply = {}, cwd?: string) => {
 	return {cmd, fake, lines, run: async (...args: string[]) => cmd.run(args, ctx)};
 };
 
-test('help lists every method and is the only subcommand safe for the assistant', async () => {
+test('no subcommand shows the help through ctx.showHelp, or the usage without it; every method asks the user first', async () => {
 	const {cmd, lines, run} = setup();
 	await run();
-	assert.equal(lines.length, 8);
+	assert.deepEqual(lines, ['http <method> <url> [options]']);
+	let shown = 0;
+	await cmd.run(['help'], {print: t => lines.push(t), clear() {}, exit() {}, showHelp: () => void shown++});
+	assert.equal(shown, 1);
+	assert.equal(lines.length, 1);
 	assert.equal(cmd.agent, 'confirm');
 	assert.deepEqual(
-		cmd.subcommands!.filter(s => s.agent === 'safe').map(s => s.name),
-		['help'],
+		cmd.subcommands!.map(s => s.name),
+		['get', 'head', 'post', 'put', 'patch', 'delete', 'options'],
 	);
+	assert.ok(cmd.subcommands!.every(s => s.agent === 'confirm'));
 });
 
 test('get prints the status line and the text body', async () => {

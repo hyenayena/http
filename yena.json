@@ -1,6 +1,6 @@
 {
 	"name": "http",
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"description": "HTTP client for modules and the assistant: all methods, custom headers and bodies, parallel batches, HTML pages shown as Markdown, private addresses blocked",
 	"runtime": "node",
 	"entry": "src/index.ts",

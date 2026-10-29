@@ -8,7 +8,7 @@ An HTTP client for yena: other modules send requests through its public entry in
 | `http get <url> [-H name:value]… [--json] [-i] [--raw] [--from <n>] [--timeout <s>]` | confirm | GET; prints `HTTP <status> · <size> · <ms>`, then the body (an HTML page as Markdown) |
 | `http head <url> …` | confirm | HEAD |
 | `http post\|put\|patch\|delete\|options <url> … [--file <path> \| --data <text…>]` | confirm | The other methods, with a body from a file or from the rest of the line |
-| `http help` | safe | Lists the subcommands |
+| `http help` | safe | The generated help (core); the option docs are shared by all methods. `http options <url>` sends an OPTIONS request |
 
 - `-H name:value` (also `--header`), repeatable. The console splits lines on whitespace, so a value cannot contain spaces; `--data` takes **the rest of the line**, joined by single spaces, so it must come last.
 - `--json` checks that the body parses as JSON, sets `content-type: application/json` (when there is a body) and `accept: application/json` unless given.
