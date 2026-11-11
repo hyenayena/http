@@ -19,7 +19,7 @@ An HTTP client for yena: other modules send requests through its public entry in
 - Every method asks before the assistant runs it (`confirm`); there is no domain allowlist yet.
 
 ## For other modules
-Add `"http": "git@github.com:hyenayena/http.git"` to `dependencies`, re-export what you use from `src/deps/http.ts`, and import `src/public.ts` there.
+Add `"http": {"source": "http", "version": "^0.4.0"}` to `dependencies`, re-export what you use from `src/deps/http.ts`, and import `src/public.ts` there.
 
 ```ts
 const http = createHttpClient({baseUrl: 'https://api.example.com/v1/', defaults: {headers: {authorization: `Bearer ${token}`}}});
