@@ -2,6 +2,8 @@
 
 An HTTP client for yena: other modules send requests through its public entry instead of writing their own wrappers, and the assistant (and you) use it from the console with the `http` command. Private, loopback and link-local addresses are refused by default. Kind: io (planned manifest field). Version 0.3.0; depends on `core` (for `sanitizeBlock`); runtime dependencies `undici`, `node-html-markdown` and `node-html-parser` (installed by the manifest's `install` script into the module's own `node_modules`).
 
+Export (`yena.json` `export.deny`): none; the module keeps no data.
+
 ## Commands
 | Command | Policy for the assistant | What it does |
 |---|---|---|

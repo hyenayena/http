@@ -1,10 +1,11 @@
 {
 	"name": "http",
-	"version": "0.4.1",
+	"version": "0.4.2",
 	"description": "HTTP client for modules and the assistant: all methods, custom headers and bodies, parallel batches, HTML pages shown as Markdown, private addresses blocked",
 	"runtime": "node",
 	"entry": "src/index.ts",
 	"install": "npm install --prefix . --omit=dev --no-audit --no-fund",
+	"export": {"deny": []},
 	"dependencies": {
 		"core": {
 			"source": "core",
